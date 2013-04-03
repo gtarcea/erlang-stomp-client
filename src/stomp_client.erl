@@ -20,7 +20,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	 terminate/2, code_change/3]).
 
--define(SERVER, ?MODULE). 
+-define(SERVER, ?MODULE).
 
 -record(state, {framer, socket, subscriptions,onmessage}).
 -record(framer_state,
@@ -42,7 +42,7 @@
 %%% API
 %%%===================================================================
 %%% @doc Starts the client
--spec start(string(),integer(),string(),string(),fun()) -> {ok,pid}.		   
+-spec start(string(),integer(),string(),string(),fun()) -> {ok,pid}.
 start(Host,Port,User,Pass,MessageFunc) ->
     start_link(Host,Port,User,Pass,MessageFunc).
 
@@ -50,7 +50,7 @@ start(Host,Port,User,Pass,MessageFunc) ->
 -spec stop(pid) -> ok.
 stop(Pid) ->
     gen_server:cast(Pid,{stop}).
-    
+
 %%% @doc Subscribe to a single topic
 -spec subscribe_topic(string(),[tuple(string(),string())],pid) -> ok.
 subscribe_topic(Topic,Options,Pid) ->
@@ -83,7 +83,7 @@ ack(Message, TransactionId,Pid) ->
 
 %%% @doc send a message to a topic
 -spec send_topic(string(),string(),[tuple(string(),string())],pid) -> ok.
-send_topic(Topic, Message,Options,Pid) -> 
+send_topic(Topic, Message,Options,Pid) ->
     gen_server:cast(Pid, {send, topic, {Topic,Message,Options}}).
 
 %%% @doc send a message to a queue
@@ -100,10 +100,11 @@ start_link(Host,Port,User,Pass,MessageFunc) ->
 %%%===================================================================
 %%% @hidden
 init([{Host,Port,User,Pass,F}]) ->
+    io:format("init pid = ~p~n", [self()]),
     ClientId = "erlang_stomp_"++binary_to_list(ossp_uuid:make(v4, text)),
     Message=lists:append(["CONNECT", "\nlogin: ", User, "\npasscode: ", Pass,"\nclient-id:",ClientId, "\n\n", [0]]),
     {ok,Sock}=gen_tcp:connect(Host,Port,[{active, false}]),
-    gen_tcp:send(Sock,Message),    
+    gen_tcp:send(Sock,Message),
     {ok, Response}=gen_tcp:recv(Sock, 0),
     State = frame(Response, #framer_state{}),
     inet:setopts(Sock,[{active,once}]),
@@ -117,28 +118,28 @@ handle_call(_Request, _From, State) ->
 %%% @hidden
 handle_cast({subscribe, topic ,Topic, Options}, #state{socket = Sock} = State) ->
     Message = lists:append(["SUBSCRIBE", "\ndestination: ", "/topic/"++Topic,format_options(Options) ,"\n\n", [0]]),
-    gen_tcp:send(Sock,Message),   
+    gen_tcp:send(Sock,Message),
     inet:setopts(Sock,[{active,once}]),
     {noreply, State#state{subscriptions = [State#state.subscriptions|Topic]}};
 
 %%% @hidden
 handle_cast({subscribe, queue ,Queue,Options}, #state{socket = Sock} = State) ->
     Message = lists:append(["SUBSCRIBE", "\ndestination: ", "/queue/"++Queue,format_options(Options) ,"\n\n", [0]]),
-    gen_tcp:send(Sock,Message),   
+    gen_tcp:send(Sock,Message),
     inet:setopts(Sock,[{active,once}]),
     {noreply, State#state{subscriptions = [State#state.subscriptions|Queue]}};
 
 %%% @hidden
 handle_cast({unsubscribe, topic ,Topic}, #state{socket = Sock} = State) ->
     Message=lists:append(["UNSUBSCRIBE", "\ndestination: ", "/topic/"++Topic, "\n\n", [0]]),
-    gen_tcp:send(Sock,Message),   
+    gen_tcp:send(Sock,Message),
     inet:setopts(Sock,[{active,once}]),
     {noreply, State#state{subscriptions = [State#state.subscriptions|Topic]}};
 
 %%% @hidden
 handle_cast({unsubscribe, queue ,Queue}, #state{socket = Sock} = State) ->
     Message=lists:append(["UNSUBSCRIBE", "\ndestination: ", "/queue/"++Queue, "\n\n", [0]]),
-    gen_tcp:send(Sock,Message),   
+    gen_tcp:send(Sock,Message),
     inet:setopts(Sock,[{active,once}]),
     {noreply, State#state{subscriptions = [State#state.subscriptions|Queue]}};
 
@@ -180,18 +181,18 @@ handle_cast({ack, Message,TransactionId},#state{socket = Socket} = State) ->
 handle_cast({send, topic, {Topic, Message,Options}}, #state{socket = Socket} = State) ->
     Msg = lists:append(["SEND","\ndestination:","/topic/"++Topic, format_options(Options),"\n\n",Message,[0]]),
     gen_tcp:send(Socket,Msg),
-    inet:setopts(Socket,[{active,once}]),    
+    inet:setopts(Socket,[{active,once}]),
     {noreply,State};
 
 %%% @hidden
 handle_cast({send, queue, {Queue, Message,Options}},#state{socket = Socket} = State) ->
     Msg = lists:append(["SEND","\ndestination:","/queue/"++Queue, format_options(Options),"\n\n",Message,[0]]),
     gen_tcp:send(Socket,Msg),
-    inet:setopts(Socket,[{active,once}]),    
+    inet:setopts(Socket,[{active,once}]),
     {noreply,State};
 
 %%% @hidden
-handle_cast(_Msg, State) ->    
+handle_cast(_Msg, State) ->
     {noreply, State}.
 
 %%% @hidden
@@ -223,12 +224,12 @@ do_framing(Data, Framer, Func) ->
 	#framer_state{messages = []} = N ->
 	    N;
 	NewState1 ->
-	    lists:foreach(fun(X) ->		
+	    lists:foreach(fun(X) ->
 				  Msg = parse(X, #parser_state{}),
 				  Func(Msg)
-			  end,NewState1#framer_state.messages),		   
-	    #framer_state{current = NewState1#framer_state.current}    
-    end.    
+			  end,NewState1#framer_state.messages),
+	    #framer_state{current = NewState1#framer_state.current}
+    end.
 
 frame([],State) ->
     State;
@@ -254,7 +255,7 @@ parse([10|[]], #parser_state{last_char = Last, header = Header, message = Messag
 %%Start of Body (end of parse)
 parse([10|Rest], #parser_state{last_char = Last, header = Header, message = Message}) when Last =:= 10 ->
     Body = lists:reverse(tl(lists:reverse(Rest))),
-    Message++[{header,Header},{body,Body}];  
+    Message++[{header,Header},{body,Body}];
 %%Get message type
 parse([10|Rest], #parser_state{got_type = false, message = Message, current = Current} = State) ->
     Type = case Current of
@@ -266,8 +267,8 @@ parse([10|Rest], #parser_state{got_type = false, message = Message, current = Cu
     parse(Rest,State#parser_state{message = Message++[{type,Type}], current = [], got_type = true, last_char = 10});
 %%Key Value Header
 parse([10|Rest], #parser_state{key = Key, current = Value, header = Header} = State) when length(Key) =/= 0 ->
-    parse(Rest,State#parser_state{last_char = 10, current =[], header = Header ++ [{Key,Value}], key = [] });  
-%%%HEADER 
+    parse(Rest,State#parser_state{last_char = 10, current =[], header = Header ++ [{Key,Value}], key = [] });
+%%%HEADER
 parse([10|Rest], #parser_state{got_type = true} = State) ->
     parse(Rest,State#parser_state{last_char = 10});
 %%Starting value
@@ -282,14 +283,14 @@ parse([First|Rest], #parser_state{last_char = Last, current = Current} = State) 
     parse(Rest, State#parser_state{last_char = First, current = Current++[First]}).
 
 format_options(Options) ->
-    lists:foldl(fun(X,Acc) -> 
+    lists:foldl(fun(X,Acc) ->
 			case X of
 			    [] ->
 				Acc;
 			    {Name, Value} ->
 				Acc++["\n"++Name++":"++Value];
 			    E ->
-				throw("Error: invalid options format: "++E) 
+				throw("Error: invalid options format: "++E)
 			end
 		end,[],Options).
 %%%@hidden
