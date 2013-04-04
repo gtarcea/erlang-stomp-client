@@ -12,7 +12,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start/5,stop/1,subscribe_topic/3,subscribe_queue/3,
+-export([start/4,stop/1,subscribe_topic/4,subscribe_queue/4,
 	 unsubscribe_topic/2,unsubscribe_queue/2,
 	 ack/2, ack/3, send_topic/4, send_queue/4,test/0]).
 
@@ -22,8 +22,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(subscription, {queue, func}).
--record(state, {framer, socket, subscriptions}).
+-record(state, {framer, socket, subscriptions = []}).
 -record(framer_state,
 	{
 	  current = [],
@@ -53,14 +52,14 @@ stop(Pid) ->
     gen_server:cast(Pid,{stop}).
 
 %%% @doc Subscribe to a single topic
--spec subscribe_topic(string(),[tuple(string(),string())],pid) -> ok.
-subscribe_topic(Topic,Options,Pid) ->
-    gen_server:cast(Pid, {subscribe,topic,Topic,Options}).
+-spec subscribe_topic(string(),[tuple(string(),string())],fun(),pid) -> ok.
+subscribe_topic(Topic,Options,Fun, Pid) ->
+    gen_server:cast(Pid, {subscribe,topic,Topic,Options, Fun}).
 
 %%% @doc Subscribe to a single queue
--spec subscribe_queue(string(),[tuple(string(),string())],pid) -> ok.
-subscribe_queue(Queue,Options,Pid) ->
-    gen_server:cast(Pid, {subscribe,queue,Queue,Options}).
+-spec subscribe_queue(string(),[tuple(string(),string())],fun(),pid) -> ok.
+subscribe_queue(Queue,Options,Fun, Pid) ->
+    gen_server:cast(Pid, {subscribe,queue,Queue,Options, Fun}).
 
 %%% @doc unsubscribe from a single topic
 -spec unsubscribe_topic(string(),pid) -> ok.
@@ -108,7 +107,7 @@ init([{Host,Port,User,Pass}]) ->
     {ok, Response}=gen_tcp:recv(Sock, 0),
     State = frame(Response, #framer_state{}),
     inet:setopts(Sock,[{active,once}]),
-    {ok, #state{framer = State, socket = Sock, onmessage = F}}.
+    {ok, #state{framer = State, socket = Sock}}.
 
 %%% @hidden
 handle_call(_Request, _From, State) ->
@@ -116,18 +115,18 @@ handle_call(_Request, _From, State) ->
     {reply, Reply, State}.
 
 %%% @hidden
-handle_cast({subscribe, topic ,Topic, Options}, #state{socket = Sock} = State) ->
+handle_cast({subscribe, topic ,Topic, Options, Fun}, #state{socket = Sock} = State) ->
     Message = lists:append(["SUBSCRIBE", "\ndestination: ", "/topic/"++Topic,format_options(Options) ,"\n\n", [0]]),
     gen_tcp:send(Sock,Message),
     inet:setopts(Sock,[{active,once}]),
-    {noreply, State#state{subscriptions = [State#state.subscriptions|Topic]}};
+    {noreply, State#state{subscriptions = [{"/topic/" ++ Topic, Fun} | State#state.subscriptions]}};
 
 %%% @hidden
-handle_cast({subscribe, queue ,Queue,Options}, #state{socket = Sock} = State) ->
+handle_cast({subscribe, queue ,Queue,Options, Fun}, #state{socket = Sock} = State) ->
     Message = lists:append(["SUBSCRIBE", "\ndestination: ", "/queue/"++Queue,format_options(Options) ,"\n\n", [0]]),
     gen_tcp:send(Sock,Message),
     inet:setopts(Sock,[{active,once}]),
-    {noreply, State#state{subscriptions = [State#state.subscriptions|Queue]}};
+    {noreply, State#state{subscriptions = [{"/queue/" ++ Queue, Fun} | State#state.subscriptions]}};
 
 %%% @hidden
 handle_cast({unsubscribe, topic ,Topic}, #state{socket = Sock} = State) ->
@@ -168,9 +167,9 @@ handle_cast({ack, Message},#state{socket = Socket} = State) ->
 handle_cast({ack, Message,TransactionId},#state{socket = Socket} = State) ->
     MessageId = case Message of
 		    [_Type, {header,Headers}, _Body] ->
-			proplists:get_value("message-id",Headers);
+                proplists:get_value("message-id",Headers);
 		    _ ->
-			Message
+                Message
 		end,
     Msg = lists:append(["ACK", "\nmessage-id:",MessageId,"\ntransaction:",TransactionId,"\n\n",[0]]),
     gen_tcp:send(Socket,Msg),
@@ -196,15 +195,15 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 %%% @hidden
-handle_info(_Info, #state{socket = Sock, onmessage = Func, framer = Framer} = State) ->
+handle_info(_Info, #state{socket = Sock, subscriptions = Subscriptions, framer = Framer} = State) ->
     {_,_,Data} = _Info,
     NewState = case Data of
-		   {error, Error} ->
-		       error_logger:error_msg("Cannot connect to STOMP ~p~n", [Error]),
-		       Framer;
-		   _ ->
-		       do_framing(Data, Framer, Func)
-	       end,
+                {error, Error} ->
+                    error_logger:error_msg("Cannot connect to STOMP ~p~n", [Error]),
+                    Framer;
+                _ ->
+                    do_framing(Data, Framer, Subscriptions)
+            end,
     inet:setopts(Sock,[{active,once}]),
     {noreply, State#state{framer = NewState}}.
 
@@ -219,16 +218,36 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-do_framing(Data, Framer, Func) ->
+do_framing(Data, Framer, Subscriptions) ->
     case frame(Data,Framer) of
-	#framer_state{messages = []} = N ->
-	    N;
-	NewState1 ->
-	    lists:foreach(fun(X) ->
-				  Msg = parse(X, #parser_state{}),
-				  Func(Msg)
-			  end,NewState1#framer_state.messages),
-	    #framer_state{current = NewState1#framer_state.current}
+    	#framer_state{messages = []} = N ->
+    	    N;
+    	NewState1 ->
+    	    lists:foreach(
+                fun(X) ->
+                    Msg = parse(X, #parser_state{}),
+                    case func_for_queue(Msg, Subscriptions) of
+                        {ok, Func} ->
+                            Func(Msg);
+                        _ ->
+                            ok
+                    end
+                end,
+                NewState1#framer_state.messages),
+    	    #framer_state{current = NewState1#framer_state.current}
+    end.
+
+func_for_queue([{type, _Type}, {header, Header}, {body, _Body}], Subscriptions) ->
+    case lists:keyfind("destination", 1, Header) of
+        {_, Queue} ->
+            case lists:keyfind(Queue, 1, Subscriptions) of
+                {_, Fun} ->
+                    {ok, Fun};
+                _ ->
+                    not_found
+            end;
+        _ ->
+            not_found
     end.
 
 frame([],State) ->
