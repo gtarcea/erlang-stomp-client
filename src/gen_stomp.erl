@@ -143,7 +143,7 @@ handle_info({tcp, Sock, RawData}, #state{ cb = Callback, cb_server_state = Callb
                             error_logger:error_msg("Cannot connect to STOMP ~p~n", [Error]),
                             Framer;
                         _ ->
-                            do_framing(RawData, Framer)
+                            do_framing(RawData, Framer, State)
             end,
             inet:setopts(Socket, [{active, once}]),
             {noreply, State#state{framer = NewState}}
@@ -197,12 +197,7 @@ code_change(OldVsn, #state{cb = Callback, cb_server_state = CallbackServerState}
 %%% Internal to STOMP message parsing and handling
 %%%------------------------------------------------------------------------
 
-%% TODO: Should this take a state and then call into gen_stomp? If so, is it a cast, call, or info?
-%% Probably a cast because there is no state that needs to be sent back to STOMP server.
-handle_message(Message) ->
-    gen_server:cast(self(), {stomp, Message}).
-
-do_framing(Data, Framer) ->
+do_framing(Data, Framer, State) ->
     case frame(Data,Framer) of
         #framer_state{messages = []} = N ->
             N;
@@ -210,7 +205,7 @@ do_framing(Data, Framer) ->
             lists:foreach(
                 fun(X) ->
                     Msg = parse(X, #parser_state{}),
-                    handle_message(Msg)
+                    handle_call({stomp, Msg}, self(), State)
                 end,
                 NewState1#framer_state.messages),
             #framer_state{current = NewState1#framer_state.current}
