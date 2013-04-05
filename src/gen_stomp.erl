@@ -197,6 +197,8 @@ code_change(OldVsn, #state{cb = Callback, cb_server_state = CallbackServerState}
 %%% Internal to STOMP message parsing and handling
 %%%------------------------------------------------------------------------
 
+%% TODO: Should this take a state and then call into gen_stomp? If so, is it a cast, call, or info?
+%% Probably a cast because there is no state that needs to be sent back to STOMP server.
 handle_message(Message) ->
     gen_server:cast(self(), {stomp, Message}).
 
