@@ -82,12 +82,12 @@ ack(Message, TransactionId,Pid) ->
     gen_server:cast(Pid, {ack, Message,TransactionId}).
 
 %%% @doc send a message to a topic
--spec send_topic(string(),string(),[tuple(string(),string())],pid) -> ok.
+-spec send_topic(string(),string(),[tuple(string(),string())] | [],pid()) -> ok.
 send_topic(Topic, Message,Options,Pid) ->
     gen_server:cast(Pid, {send, topic, {Topic,Message,Options}}).
 
 %%% @doc send a message to a queue
--spec send_queue(string(),string(),[tuple(string(),string())],pid) -> ok.
+-spec send_queue(string(),string(),[tuple(string(),string())],pid()) -> ok.
 send_queue(Queue, Message,Options,Pid) ->
     gen_server:cast(Pid, {send, queue, {Queue,Message,Options}}).
 

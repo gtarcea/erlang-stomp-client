@@ -17,21 +17,19 @@
 
 -record(framer_state,
     {
-        current = [] :: [string()],
-        messages = [] :: [string()]
+        current = [],
+        messages = []
     }).
--type(framer_state() :: #framer_state{}).
 
 -record(parser_state,
     {
-        current = [] :: [string()],
-        last_char :: char(),
-        key = [] :: [string()],
-        message = [] :: [string()],
-        got_type = false :: boolean(),
-        header = [] :: [{string(), string()}]
+        current = [],
+        last_char,
+        key = [],
+        message = [],
+        got_type = false,
+        header = []
     }).
--type(parser_state() :: #parser_state{}).
 
 -record(state,
     {
@@ -41,7 +39,6 @@
         cb_server_state,
         cb
     }).
--type(state() :: #state{}).
 
 %%%------------------------------------------------------------------------
 %%% API
@@ -65,7 +62,7 @@ start_link(CallbackModule, Host, Port, Username, Password, Queues, InitParams) -
 init([CallbackModule, Host, Port, Username, Password, _Queues, InitParams]) ->
     case CallbackModule:init(InitParams) of
         {ok, CallbackServerState} ->
-            State = init_stomp(Host, Port, Username, Password),
+            {ok, State} = init_stomp(Host, Port, Username, Password),
             {ok, State#state{cb = CallbackModule, cb_server_state = CallbackServerState}};
         Error ->
             Error
