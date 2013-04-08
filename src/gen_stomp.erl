@@ -80,7 +80,7 @@ init_stomp(Host, Port, Username, Password) ->
     {ok, #state{framer = State, socket = Sock}}.
 
 %% @doc subscribes to a queue
--spec subscribe(string(), [tuple(string(), string())]) -> ok.
+-spec subscribe(string(), [tuple(string(), string())] | []) -> ok.
 subscribe(Queue, Options) ->
     gen_server:cast(self(), {subscribe, Queue, Options}).
 
@@ -88,7 +88,7 @@ subscribe(Queue, Options) ->
 unsubscribe(Queue) ->
     gen_server:cast(self(), {unsubscribe, Queue}).
 
--spec send_message(string(), string(), [tuple(string(), string())]) -> ok.
+-spec send_message(string(), string(), [tuple(string(), string())] | []) -> ok.
 send_message(Queue, Message, Options) ->
     gen_server:cast(self(), {send_message, {Queue, Message, Options}}).
 
