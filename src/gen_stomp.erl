@@ -15,6 +15,23 @@
 %% API
 -export([subscribe/2, unsubscribe/1, send_message/3]).
 
+-record(framer_state,
+    {
+        current = [] :: [string()],
+        messages = [] :: [string()]
+    }).
+-type(framer_state() :: #framer_state{}).
+
+-record(parser_state,
+    {
+        current = [] :: [string()],
+        last_char :: char(),
+        key = [] :: [string()],
+        message = [] :: [string()],
+        got_type = false :: boolean(),
+        header = [] :: [{string(), string()}]
+    }).
+-type(parser_state() :: #parser_state{}).
 
 -record(state,
     {
@@ -24,23 +41,7 @@
         cb_server_state,
         cb
     }).
-
--record(framer_state,
-    {
-        current = [],
-        messages = []
-    }).
-
--record(parser_state,
-    {
-        current = [],
-        last_char,
-        key = [],
-        message = [],
-        got_type = false,
-        header = []
-    }).
-
+-type(state() :: #state{}).
 
 %%%------------------------------------------------------------------------
 %%% API
