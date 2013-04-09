@@ -53,12 +53,9 @@ init([CallbackModule, Host, Port, Username, Password, Queues, InitParams]) ->
 
 %% Setups state, initializes the tcp connection and connects to stomp server.
 init_stomp(Host, Port, Username, Password, Queues) ->
-    ConnectMessage = stompm:connect(Username, Password),
-    {ok,Sock}=gen_tcp:connect(Host,Port,[{active, false}]),
-    gen_tcp:send(Sock,ConnectMessage),
-    {ok, _Response}=gen_tcp:recv(Sock, 0),
+    {ok, Sock} = stomp_client:connect(Host, Port, Username, Password),
     subscribe_to_queues(Sock, Queues),
-    inet:setopts(Sock,[{active,once}]),
+    %inet:setopts(Sock,[{active,once}]),
     {ok, #state{socket = Sock}}.
 
 subscribe_to_queues(Sock, Queues) ->
@@ -95,19 +92,13 @@ handle_call(Request, From, #state{cb = Callback, cb_server_state = CallbackServe
 %% @hidden
 %% Implements handle_cast in gen_server and calls the gen_stomp handle_cast callback
 handle_cast({subscribe, Queue, Options}, #state{socket = Socket} = State) ->
-    SubscribeMessage = stompm:subscribe(Queue, Options),
-    gen_tcp:send(Socket,SubscribeMessage),
-    inet:setopts(Socket,[{active,once}]),
+    stomp_client:subscribe(Socket, Queue, Options),
     {noreply, State#state{subscriptions = [Queue | State#state.subscriptions]}};
 handle_cast({unsubscribe, Queue}, #state{socket = Socket} = State) ->
-    UnsubscribeMessage = stompm:unsubscribe(Queue),
-    gen_tcp:send(Socket, UnsubscribeMessage),
-    inet:setopts(Socket,[{active,once}]),
+    stomp_client:unsubscribe(Socket, Queue),
     {noreply, State#state{subscriptions = [Queue | State#state.subscriptions]}};
 handle_cast({send, {Queue, Message, Options}}, #state{socket = Socket} = State) ->
-    SendMessage = stompm:send(Queue, Message, Options),
-    gen_tcp:send(Socket,SendMessage),
-    inet:setopts(Socket,[{active,once}]),
+    stomp_client:send(Socket, Queue, Message, Options),
     {noreply,State};
 handle_cast(Request, #state{cb = Callback, cb_server_state = CallbackServerState} = State) ->
     Response = Callback:handle_cast(Request, CallbackServerState),
