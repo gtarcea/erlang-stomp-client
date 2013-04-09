@@ -17,35 +17,30 @@
       header = []
     }).
 
--spec connect(string(), string()) -> {ok, string()}.
+-spec connect(string(), string()) -> string().
 connect(Username, Password) ->
     ClientId = "erlang_stomp_"++binary_to_list(ossp_uuid:make(v4, text)),
-    Message=lists:append(["CONNECT", "\nlogin: ", Username, "\npasscode: ", Password, "\nclient-id:",ClientId, "\n\n", [0]]),
-    {ok, Message}.
+    lists:append(["CONNECT", "\nlogin: ", Username, "\npasscode: ", Password, "\nclient-id:",ClientId, "\n\n", [0]]).
 
--spec subscribe(string(), [{string(), string()}] | []) -> {ok, string()}.
+-spec subscribe(string(), [{string(), string()}] | []) -> string().
 subscribe(Queue, Options) ->
-    Message = lists:append(["SUBSCRIBE", "\ndestination: ", Queue, format_options(Options) ,"\n\n", [0]]),
-    {ok, Message}.
+    lists:append(["SUBSCRIBE", "\ndestination: ", Queue, format_options(Options) ,"\n\n", [0]]).
 
--spec unsubscribe(string()) -> {ok, string()}.
+-spec unsubscribe(string()) -> string().
 unsubscribe(Queue) ->
-    Message=lists:append(["UNSUBSCRIBE", "\ndestination: ", Queue, "\n\n", [0]]),
-    {ok, Message}.
+    lists:append(["UNSUBSCRIBE", "\ndestination: ", Queue, "\n\n", [0]]).
 
--spec disconnect() -> {ok, string()}.
+-spec disconnect() -> string().
 disconnect() ->
-    Message = lists:append(["DISCONNECT","\n\n",[0]]),
-    {ok, Message}.
+    lists:append(["DISCONNECT","\n\n",[0]]).
 
 -spec ack(string()) -> ok.
 ack(_Message) ->
     ok.
 
--spec send(string(), string(), [{string(), string()}] | []) -> {ok, string()}.
+-spec send(string(), string(), [{string(), string()}] | []) -> string().
 send(Queue, Message, Options) ->
-    Msg = lists:append(["SEND","\ndestination:", Queue, format_options(Options),"\n\n",Message,[0]]),
-    {ok, Msg}.
+    lists:append(["SEND","\ndestination:", Queue, format_options(Options),"\n\n",Message,[0]]).
 
 -spec parse(string(), function()) -> ok.
 handle_data(Data, Func) ->

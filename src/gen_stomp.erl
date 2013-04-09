@@ -53,7 +53,7 @@ init([CallbackModule, Host, Port, Username, Password, Queues, InitParams]) ->
 
 %% Setups state, initializes the tcp connection and connects to stomp server.
 init_stomp(Host, Port, Username, Password, Queues) ->
-    {ok, ConnectMessage} = stompm:connect(Username, Password),
+    ConnectMessage = stompm:connect(Username, Password),
     {ok,Sock}=gen_tcp:connect(Host,Port,[{active, false}]),
     gen_tcp:send(Sock,ConnectMessage),
     {ok, _Response}=gen_tcp:recv(Sock, 0),
@@ -64,7 +64,7 @@ init_stomp(Host, Port, Username, Password, Queues) ->
 subscribe_to_queues(Sock, Queues) ->
     lists:foreach(
         fun({Queue, Options}) ->
-            {ok, SubscribeMessage} = stompm:subscribe(Queue, Options),
+            SubscribeMessage = stompm:subscribe(Queue, Options),
             gen_tcp:send(Sock, SubscribeMessage)
         end, Queues).
 
@@ -95,17 +95,17 @@ handle_call(Request, From, #state{cb = Callback, cb_server_state = CallbackServe
 %% @hidden
 %% Implements handle_cast in gen_server and calls the gen_stomp handle_cast callback
 handle_cast({subscribe, Queue, Options}, #state{socket = Socket} = State) ->
-    {ok, SubscribeMessage} = stompm:subscribe(Queue, Options),
+    SubscribeMessage = stompm:subscribe(Queue, Options),
     gen_tcp:send(Socket,SubscribeMessage),
     inet:setopts(Socket,[{active,once}]),
     {noreply, State#state{subscriptions = [Queue | State#state.subscriptions]}};
 handle_cast({unsubscribe, Queue}, #state{socket = Socket} = State) ->
-    {ok, UnsubscribeMessage} = stompm:unsubscribe(Queue),
+    UnsubscribeMessage = stompm:unsubscribe(Queue),
     gen_tcp:send(Socket, UnsubscribeMessage),
     inet:setopts(Socket,[{active,once}]),
     {noreply, State#state{subscriptions = [Queue | State#state.subscriptions]}};
 handle_cast({send, {Queue, Message, Options}}, #state{socket = Socket} = State) ->
-    {ok, SendMessage} = stompm:send(Queue, Message, Options),
+    SendMessage = stompm:send(Queue, Message, Options),
     gen_tcp:send(Socket,SendMessage),
     inet:setopts(Socket,[{active,once}]),
     {noreply,State};
