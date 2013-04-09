@@ -59,25 +59,35 @@ behaviour_info(callbacks) ->
 start_link(CallbackModule, Host, Port, Username, Password, Queues, InitParams) ->
     gen_server:start_link(?MODULE, [CallbackModule, Host, Port, Username, Password, Queues, InitParams], []).
 
-init([CallbackModule, Host, Port, Username, Password, _Queues, InitParams]) ->
+init([CallbackModule, Host, Port, Username, Password, Queues, InitParams]) ->
     case CallbackModule:init(InitParams) of
         {ok, CallbackServerState} ->
-            {ok, State} = init_stomp(Host, Port, Username, Password),
+            {ok, State} = init_stomp(Host, Port, Username, Password, Queues),
             {ok, State#state{cb = CallbackModule, cb_server_state = CallbackServerState}};
         Error ->
             Error
     end.
 
 %% Setups state, initializes the tcp connection and connects to stomp server.
-init_stomp(Host, Port, Username, Password) ->
+init_stomp(Host, Port, Username, Password, Queues) ->
     ClientId = "erlang_stomp_"++binary_to_list(ossp_uuid:make(v4, text)),
     Message=lists:append(["CONNECT", "\nlogin: ", Username, "\npasscode: ", Password,"\nclient-id:",ClientId, "\n\n", [0]]),
     {ok,Sock}=gen_tcp:connect(Host,Port,[{active, false}]),
     gen_tcp:send(Sock,Message),
     {ok, Response}=gen_tcp:recv(Sock, 0),
+    subscribe_to_queues(Sock, Queues),
     State = frame(Response, #framer_state{}),
     inet:setopts(Sock,[{active,once}]),
     {ok, #state{framer = State, socket = Sock}}.
+
+subscribe_to_queues(Sock, Queues) ->
+    lists:foreach(
+        fun({Queue, Options}) ->
+            Message = lists:append(["SUBSCRIBE", "\ndestination: ", Queue, format_options(Options) ,"\n\n", [0]]),
+            io:format("subscribe_to_queues: ~s~n", [Message]),
+            gen_tcp:send(Sock, Message),
+            ok
+        end, Queues).
 
 %% @doc subscribes to a queue
 -spec subscribe(string(), [tuple(string(), string())] | []) -> ok.
